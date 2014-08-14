@@ -17,7 +17,7 @@
 package com.badlogic.gdx.graphics.g3d.decals;
 
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.GL10;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Quaternion;
 import com.badlogic.gdx.math.Vector2;
@@ -57,7 +57,7 @@ public class Decal {
 	protected DecalMaterial material = new DecalMaterial();
 	protected boolean updated = false;
 
-	protected Decal () {
+	public Decal () {
 	}
 
 	/** Sets the color of all four vertices to the specified color
@@ -74,7 +74,7 @@ public class Decal {
 		vertices[C3] = color;
 		vertices[C4] = color;
 	}
-	
+
 	/** Sets the color used to tint this decal. Default is {@link Color#WHITE}. */
 	public void setColor (Color tint) {
 		float color = tint.toFloatBits();
@@ -83,7 +83,7 @@ public class Decal {
 		vertices[C3] = color;
 		vertices[C4] = color;
 	}
-	
+
 	/** @see #setColor(Color) */
 	public void setColor (float color) {
 		vertices[C1] = color;
@@ -91,28 +91,28 @@ public class Decal {
 		vertices[C3] = color;
 		vertices[C4] = color;
 	}
-	
+
 	/** Sets the rotation on the local X axis to the specified angle
 	 * 
 	 * @param angle Angle in degrees to set rotation to */
-	public void setRotationX(float angle){
-		rotation.set(X_AXIS, angle);
+	public void setRotationX (float angle) {
+		rotation.set(Vector3.X, angle);
 		updated = false;
 	}
-	
+
 	/** Sets the rotation on the local Y axis to the specified angle
 	 * 
 	 * @param angle Angle in degrees to set rotation to */
-	public void setRotationY(float angle){
-		rotation.set(Y_AXIS, angle);
+	public void setRotationY (float angle) {
+		rotation.set(Vector3.Y, angle);
 		updated = false;
 	}
-	
+
 	/** Sets the rotation on the local Z axis to the specified angle
 	 * 
 	 * @param angle Angle in degrees to set rotation to */
-	public void setRotationZ(float angle){
-		rotation.set(Z_AXIS, angle);
+	public void setRotationZ (float angle) {
+		rotation.set(Vector3.Z, angle);
 		updated = false;
 	}
 
@@ -120,7 +120,7 @@ public class Decal {
 	 * 
 	 * @param angle Angle in degrees to rotate by */
 	public void rotateX (float angle) {
-		rotator.set(X_AXIS, angle);
+		rotator.set(Vector3.X, angle);
 		rotation.mul(rotator);
 		updated = false;
 	}
@@ -129,7 +129,7 @@ public class Decal {
 	 * 
 	 * @param angle Angle in degrees to rotate by */
 	public void rotateY (float angle) {
-		rotator.set(Y_AXIS, angle);
+		rotator.set(Vector3.Y, angle);
 		rotation.mul(rotator);
 		updated = false;
 	}
@@ -138,8 +138,17 @@ public class Decal {
 	 * 
 	 * @param angle Angle in degrees to rotate by */
 	public void rotateZ (float angle) {
-		rotator.set(Z_AXIS, angle);
+		rotator.set(Vector3.Z, angle);
 		rotation.mul(rotator);
+		updated = false;
+	}
+
+	/** Sets the rotation of this decal to the given angles on all axes.
+	 * @param yaw Angle in degrees to rotate around the Y axis
+	 * @param pitch Angle in degrees to rotate around the X axis
+	 * @param roll Angle in degrees to rotate around the Z axis */
+	public void setRotation (float yaw, float pitch, float roll) {
+		rotation.setEulerAngles(yaw, pitch, roll);
 		updated = false;
 	}
 
@@ -150,6 +159,13 @@ public class Decal {
 		tmp.set(up).crs(dir).nor();
 		tmp2.set(dir).crs(tmp).nor();
 		rotation.setFromAxes(tmp.x, tmp2.x, dir.x, tmp.y, tmp2.y, dir.y, tmp.z, tmp2.z, dir.z);
+		updated = false;
+	}
+
+	/** Sets the rotation of this decal based on the provided Quaternion
+	 * @param q desired Rotation */
+	public void setRotation(Quaternion q) {
+		rotation.set(q);
 		updated = false;
 	}
 
@@ -233,6 +249,12 @@ public class Decal {
 		updated = false;
 	}
 
+	/** @see Decal#translate(float, float, float) */
+	public void translate(Vector3 trans) {
+		this.position.add(trans);
+		updated = false;
+	}
+
 	/** Sets the position to the given world coordinates
 	 * 
 	 * @param x X position
@@ -240,6 +262,12 @@ public class Decal {
 	 * @param z Z Position */
 	public void setPosition (float x, float y, float z) {
 		this.position.set(x, y, z);
+		updated = false;
+	}
+
+	/** @see Decal#setPosition(float, float, float) */
+	public void setPosition(Vector3 pos) {
+		this.position.set(pos);
 		updated = false;
 	}
 
@@ -560,9 +588,6 @@ public class Decal {
 	public static final int V4 = 23;
 
 	protected static Quaternion rotator = new Quaternion(0, 0, 0, 0);
-	protected static final Vector3 X_AXIS = new Vector3(1, 0, 0);
-	protected static final Vector3 Y_AXIS = new Vector3(0, 1, 0);
-	protected static final Vector3 Z_AXIS = new Vector3(0, 0, 1);
 
 	/** Creates a decal assuming the dimensions of the texture region
 	 * 
@@ -580,7 +605,7 @@ public class Decal {
 	 * @return Created decal */
 	public static Decal newDecal (TextureRegion textureRegion, boolean hasTransparency) {
 		return newDecal(textureRegion.getRegionWidth(), textureRegion.getRegionHeight(), textureRegion,
-			hasTransparency ? GL10.GL_SRC_ALPHA : DecalMaterial.NO_BLEND, hasTransparency ? GL10.GL_ONE_MINUS_SRC_ALPHA
+			hasTransparency ? GL20.GL_SRC_ALPHA : DecalMaterial.NO_BLEND, hasTransparency ? GL20.GL_ONE_MINUS_SRC_ALPHA
 				: DecalMaterial.NO_BLEND);
 	}
 
@@ -604,8 +629,8 @@ public class Decal {
 	 * @param hasTransparency Whether or not this sprite will be treated as having transparency (transparent png, etc.)
 	 * @return Created decal */
 	public static Decal newDecal (float width, float height, TextureRegion textureRegion, boolean hasTransparency) {
-		return newDecal(width, height, textureRegion, hasTransparency ? GL10.GL_SRC_ALPHA : DecalMaterial.NO_BLEND,
-			hasTransparency ? GL10.GL_ONE_MINUS_SRC_ALPHA : DecalMaterial.NO_BLEND);
+		return newDecal(width, height, textureRegion, hasTransparency ? GL20.GL_SRC_ALPHA : DecalMaterial.NO_BLEND,
+			hasTransparency ? GL20.GL_ONE_MINUS_SRC_ALPHA : DecalMaterial.NO_BLEND);
 	}
 
 	/** Creates a decal using the region for texturing and the specified blending parameters for blending

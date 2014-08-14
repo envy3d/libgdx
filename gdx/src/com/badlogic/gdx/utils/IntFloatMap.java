@@ -16,13 +16,10 @@
 
 package com.badlogic.gdx.utils;
 
-import com.badlogic.gdx.math.MathUtils;
-import com.badlogic.gdx.utils.IdentityMap.Entries;
-import com.badlogic.gdx.utils.IdentityMap.Keys;
-import com.badlogic.gdx.utils.IdentityMap.Values;
-
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+
+import com.badlogic.gdx.math.MathUtils;
 
 /** An unordered map where the keys are ints and values are floats. This implementation is a cuckoo hash map using 3 hashes, random
  * walking, and a small stash for problematic keys. Null keys are not allowed. No allocation is done except when growing the table
@@ -32,7 +29,7 @@ import java.util.NoSuchElementException;
  * depending on hash collisions. Load factors greater than 0.91 greatly increase the chances the map will have to rehash to the
  * next higher POT size.
  * @author Nathan Sweet */
-public class IntFloatMap {
+public class IntFloatMap implements Iterable<IntFloatMap.Entry> {
 	private static final int PRIME1 = 0xbe1f14b1;
 	private static final int PRIME2 = 0xb4b82e39;
 	private static final int PRIME3 = 0xced1c241;
@@ -71,7 +68,7 @@ public class IntFloatMap {
 	 * before growing the backing table. */
 	public IntFloatMap (int initialCapacity, float loadFactor) {
 		if (initialCapacity < 0) throw new IllegalArgumentException("initialCapacity must be >= 0: " + initialCapacity);
-		if (capacity > 1 << 30) throw new IllegalArgumentException("initialCapacity is too large: " + initialCapacity);
+		if (initialCapacity > 1 << 30) throw new IllegalArgumentException("initialCapacity is too large: " + initialCapacity);
 		capacity = MathUtils.nextPowerOfTwo(initialCapacity);
 
 		if (loadFactor <= 0) throw new IllegalArgumentException("loadFactor must be > 0: " + loadFactor);
@@ -85,6 +82,17 @@ public class IntFloatMap {
 
 		keyTable = new int[capacity + stashCapacity];
 		valueTable = new float[keyTable.length];
+	}
+
+	/** Creates a new map identical to the specified map. */
+	public IntFloatMap (IntFloatMap map) {
+		this(map.capacity, map.loadFactor);
+		stashSize = map.stashSize;
+		System.arraycopy(map.keyTable, 0, keyTable, 0, map.keyTable.length);
+		System.arraycopy(map.valueTable, 0, valueTable, 0, map.valueTable.length);
+		size = map.size;
+		zeroValue = map.zeroValue;
+		hasZeroValue = map.hasZeroValue;
 	}
 
 	public void put (int key, float value) {
@@ -309,6 +317,16 @@ public class IntFloatMap {
 	/** Returns the key's current value and increments the stored value. If the key is not in the map, defaultValue + increment is
 	 * put into the map. */
 	public float getAndIncrement (int key, float defaultValue, float increment) {
+		if (key == 0) {
+			if (hasZeroValue) {
+				zeroValue += increment;
+			} else {
+				hasZeroValue = true;
+				zeroValue = defaultValue + increment;
+				++size;
+			}
+			return zeroValue;
+		}
 		int index = key & mask;
 		if (key != keyTable[index]) {
 			index = hash2(key);
@@ -414,6 +432,7 @@ public class IntFloatMap {
 	}
 
 	public void clear () {
+		if (size == 0) return;
 		int[] keyTable = this.keyTable;
 		for (int i = capacity + stashSize; i-- > 0;)
 			keyTable[i] = EMPTY;
@@ -435,7 +454,7 @@ public class IntFloatMap {
 	/** Returns true if the specified value is in the map. Note this traverses the entire map and compares every value, which may be
 	 * an expensive operation. */
 	public boolean containsValue (float value, float epsilon) {
-		if (hasZeroValue && zeroValue == value) return true;
+		if (hasZeroValue && Math.abs(zeroValue - value) <= epsilon) return true;
 		float[] valueTable = this.valueTable;
 		for (int i = capacity + stashSize; i-- > 0;)
 			if (Math.abs(valueTable[i] - value) <= epsilon) return true;
@@ -472,7 +491,7 @@ public class IntFloatMap {
 		return notFound;
 	}
 
-	/** Increases the size of the backing array to acommodate the specified number of additional items. Useful before adding many
+	/** Increases the size of the backing array to accommodate the specified number of additional items. Useful before adding many
 	 * items to avoid multiple backing array resizes. */
 	public void ensureCapacity (int additionalCapacity) {
 		int sizeNeeded = size + additionalCapacity;
@@ -548,6 +567,10 @@ public class IntFloatMap {
 		return buffer.toString();
 	}
 
+	public Iterator<Entry> iterator () {
+		return entries();
+	}
+
 	/** Returns an iterator for the entries in the map. Remove is supported. Note that the same iterator instance is returned each
 	 * time this method is called. Use the {@link Entries} constructor for nested or multithreaded iteration. */
 	public Entries entries () {
@@ -605,7 +628,7 @@ public class IntFloatMap {
 		return keys2;
 	}
 
-	static public class Entry<K> {
+	static public class Entry {
 		public int key;
 		public float value;
 
@@ -614,7 +637,7 @@ public class IntFloatMap {
 		}
 	}
 
-	static private class MapIterator<K> {
+	static private class MapIterator {
 		static final int INDEX_ILLEGAL = -2;
 		static final int INDEX_ZERO = -1;
 
@@ -656,6 +679,8 @@ public class IntFloatMap {
 				throw new IllegalStateException("next must be called before remove.");
 			} else if (currentIndex >= map.capacity) {
 				map.removeStashIndex(currentIndex);
+				nextIndex = currentIndex - 1;
+				findNextIndex();
 			} else {
 				map.keyTable[currentIndex] = EMPTY;
 			}
@@ -689,20 +714,26 @@ public class IntFloatMap {
 		}
 
 		public boolean hasNext () {
+			if (!valid) throw new GdxRuntimeException("#iterator() cannot be used nested.");
 			return hasNext;
 		}
 
 		public Iterator<Entry> iterator () {
 			return this;
 		}
+
+		public void remove () {
+			super.remove();
+		}
 	}
 
-	static public class Values extends MapIterator<Object> {
+	static public class Values extends MapIterator {
 		public Values (IntFloatMap map) {
 			super(map);
 		}
 
 		public boolean hasNext () {
+			if (!valid) throw new GdxRuntimeException("#iterator() cannot be used nested.");
 			return hasNext;
 		}
 
@@ -734,6 +765,7 @@ public class IntFloatMap {
 		}
 
 		public boolean hasNext () {
+			if (!valid) throw new GdxRuntimeException("#iterator() cannot be used nested.");
 			return hasNext;
 		}
 

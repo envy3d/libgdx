@@ -16,6 +16,7 @@
 
 package com.badlogic.gdx.assets.loaders;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.assets.AssetDescriptor;
 import com.badlogic.gdx.assets.AssetLoaderParameters;
 import com.badlogic.gdx.assets.AssetManager;
@@ -40,13 +41,24 @@ public class BitmapFontLoader extends AsynchronousAssetLoader<BitmapFont, Bitmap
 
 	@Override
 	public Array<AssetDescriptor> getDependencies (String fileName, FileHandle file, BitmapFontParameter parameter) {
-		Array<AssetDescriptor> deps = new Array<AssetDescriptor>();
+		Array<AssetDescriptor> deps = new Array();
 		if (parameter != null && parameter.bitmapFontData != null) {
 			data = parameter.bitmapFontData;
 			return deps;
 		}
 		data = new BitmapFontData(file, parameter != null ? parameter.flip : false);
-		deps.add(new AssetDescriptor(data.getImagePath(), Texture.class));
+		for (int i = 0; i < data.getImagePaths().length; i++) {
+			TextureLoader.TextureParameter textureParams = new TextureLoader.TextureParameter();
+
+			if (parameter != null) {
+				textureParams.genMipMaps = parameter.genMipMaps;
+				textureParams.minFilter = parameter.minFilter;
+				textureParams.magFilter = parameter.magFilter;
+			}
+
+			AssetDescriptor descriptor = new AssetDescriptor(resolve(data.getImagePath(i)), Texture.class, textureParams);
+			deps.add(descriptor);
+		}
 		return deps;
 	}
 
@@ -56,9 +68,11 @@ public class BitmapFontLoader extends AsynchronousAssetLoader<BitmapFont, Bitmap
 
 	@Override
 	public BitmapFont loadSync (AssetManager manager, String fileName, FileHandle file, BitmapFontParameter parameter) {
-		TextureRegion region = new TextureRegion(manager.get(data.getImagePath(), Texture.class));
-		if (parameter != null) region.getTexture().setFilter(parameter.minFitler, parameter.maxFilter);
-		return new BitmapFont(data, region, true);
+		TextureRegion[] regs = new TextureRegion[data.getImagePaths().length];
+		for (int i = 0; i < regs.length; i++) {
+			regs[i] = new TextureRegion(manager.get(data.getImagePath(i), Texture.class));
+		}
+		return new BitmapFont(data, regs, true);
 	}
 
 	/** Parameter to be passed to {@link AssetManager#load(String, Class, AssetLoaderParameters)} if additional configuration is
@@ -67,10 +81,12 @@ public class BitmapFontLoader extends AsynchronousAssetLoader<BitmapFont, Bitmap
 	static public class BitmapFontParameter extends AssetLoaderParameters<BitmapFont> {
 		/** whether to flipY the font or not **/
 		public boolean flip = false;
+		/** whether to generate mipmaps **/
+		public boolean genMipMaps = false;
 		/** the minimum filter to be used for the backing texture */
-		public TextureFilter minFitler = TextureFilter.Nearest;
+		public TextureFilter minFilter = TextureFilter.Nearest;
 		/** the maximum filter to be used for the backing texture */
-		public TextureFilter maxFilter = TextureFilter.Nearest;
+		public TextureFilter magFilter = TextureFilter.Nearest;
 		/** optional BitmapFontData to be used instead of loading the texture directly. Use this if your font is embedded in a skin. **/
 		public BitmapFontData bitmapFontData = null;
 	}
